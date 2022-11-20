@@ -43,6 +43,25 @@ text_sensor:
             payload: !lambda |-
               return id(uart_readline).state;
 
+# Pushbutton to unlock Tesla charge port
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: 14
+      inverted: true
+    name: "Unlock Tesla Charge Port Button"
+
+# Charge lock status light
+light:
+  - platform: binary
+    name: "Tesla Charge Port Lock Status Light"
+    output: charge_port_lock_status_output
+
+output:
+  - id: charge_port_lock_status_output
+    platform: gpio
+    pin: GPIO12
+
 switch:
   - platform: template
     name: "solar_mode"
