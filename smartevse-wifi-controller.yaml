@@ -35,13 +35,13 @@ text_sensor:
     App.register_component(uart_sensor);
     return {uart_sensor};
   text_sensors:
-    id: "uart_readline"
-    on_value:
-      then:
-        - mqtt.publish:
-            topic: evse-controller/uart_rx
-            payload: !lambda |-
-              return id(uart_readline).state;
+    - id: "uart_readline"
+      on_value:
+        then:
+          - mqtt.publish:
+              topic: evse-controller/uart_rx
+              payload: !lambda |-
+                return id(uart_readline).state;
 
 # Pushbutton to unlock Tesla charge port
 binary_sensor:
@@ -64,20 +64,53 @@ output:
 
 switch:
   - platform: template
-    name: "solar_mode"
-    lambda: |-
-      if (id(uart_readline).state == "MODE    - Set to Normal, Smart or Solar EVSE mode            - Solar") {
-        return true;
-      } else if(id(uart_readline).state == "MODE    - Set to Normal, Smart or Solar EVSE mode            - Normal") {
-        return false;
-      } else {
-        return {};
-      }
-    # These are custom shortcuts added to the SmartEVSE firmware
+    id: "ev_charge_solar_mode"
+    name: "ev_charge_solar_mode"
     turn_on_action:
+      # Write twice, to increase robustness
+      - uart.write: "MODE\n"
+      - delay: 500ms
+      - uart.write: "SOLAR\n"
+      - delay: 500ms
+      - uart.write: "MODE\n"
+      - delay: 500ms
       - uart.write: "SOLAR\n"
     turn_off_action:
+      # Write twice, to increase robustness
+      - uart.write: "MODE\n"
+      - delay: 500ms
       - uart.write: "NORMAL\n"
+      - delay: 500ms
+      - uart.write: "MODE\n"
+      - delay: 500ms
+      - uart.write: "NORMAL\n"
+
+# Example configuration entry
+number:
+  - platform: template
+    id: ev_charge_max_current_A
+    name: "EV Charge Max Current (A)"
+    optimistic: false
+    min_value: 6
+    max_value: 48
+    step: 1
+    set_action:
+      # Do this twice, to increase robustness
+      - uart.write: "MAX\n"
+      - delay: 500ms
+      - uart.write: !lambda
+          std::string str = std::to_string((int)x) + std::string("\n");
+          ESP_LOGI("main", "MAX %s", str.c_str());
+          std::vector<uint8_t> vec(str.begin(), str.end());
+          return vec;
+      - delay: 500ms
+      - uart.write: "MAX\n"
+      - delay: 500ms
+      - uart.write: !lambda
+          std::string str = std::to_string((int)x) + std::string("\n");
+          ESP_LOGI("main", "MAX %s", str.c_str());
+          std::vector<uint8_t> vec(str.begin(), str.end());
+          return vec;
 
 # This triggers SmartEVSE to output it's current state
 interval:
@@ -87,7 +120,8 @@ interval:
 
 # Enable Home Assistant API
 api:
-  password: !secret api_password
+  encryption:
+    key: !secret api_base64_encryption_key
 
 ota:
   password: !secret ota_password
